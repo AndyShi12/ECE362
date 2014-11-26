@@ -65,50 +65,76 @@
 #include <mc9s12c32.h>
 
 /* All functions after main should be initialized here */
-char inchar(void);
-void outchar(char x);
-
+void outchar(char x); // for debugging use only
+char inchar(void);  // for bonus option (terminal input for setting clock)
+void rdisp(void);   // RPM display
+void bco(char x);   // SCI buffered character output
+void shiftout(char);  // LCD drivers (written previously)
+void lcdwait(void);
+void send_byte(char);
+void send_i(char);
+void chgline(void);
+void print_c(char);
+void pmsglcd(char[]);
 
 /* Variable declarations */
-
+char leftpb = 0;  // left pushbutton flag
+char rghtpb = 0;  // right pushbutton flag
+char prevpb = 0;  // previous pushbutton state
+char runstp = 0;  // motor run/stop flag
+char onesec   = 0;  // one second flag
+char tenths = 0;  // tenth of a second flag
+char tin  = 0;  // SCI transmit display buffer IN pointer
+char tout = 0;  // SCI transmit display buffer OUT pointer
+int red =0;
+int blue = 0;
+int green = 0;
+int pulscnt   = 0;  // pulse count (read from PA every second)
+int colormode = 1;
+int color = 1;
+int LINE1 = 1;
+int LINE2 = 0;
+char *mess;
+int right = 1;
+int left = 1;
+unsigned int in0;
+unsigned int in1;
+unsigned int in2;
+unsigned int in3;
+int wait;
    	   			 		  			 		       
 
 /* Special ASCII characters */
-#define CR 0x0D		// ASCII return 
-#define LF 0x0A		// ASCII new line 
+#define TSIZE 81  // transmit buffer size (80 characters)
+char tbuf[TSIZE]; // SCI transmit display buffer
+
+#define CR 0x0D   // ASCII return 
+#define LF 0x0A   // ASCII new line 
 
 /* LCD COMMUNICATION BIT MASKS (note - different than previous labs) */
-#define RS 0x10		// RS pin mask (PTT[4])
-#define RW 0x20		// R/W pin mask (PTT[5])
-#define LCDCLK 0x40	// LCD EN/CLK pin mask (PTT[6])
+#define RS 0x10   // RS pin mask (PTT[4])
+#define RW 0x20   // R/W pin mask (PTT[5])
+#define LCDCLK 0x40 // LCD EN/CLK pin mask (PTT[6])
 
 /* LCD INSTRUCTION CHARACTERS */
-#define LCDON 0x0F	// LCD initialization command
-#define LCDCLR 0x01	// LCD clear display command
-#define TWOLINE 0x38	// LCD 2-line enable command
-#define CURMOV 0xFE	// LCD cursor move instruction
-#define LINE1 = 0x80	// LCD line 1 cursor position
-#define LINE2 = 0xC0	// LCD line 2 cursor position
-
+#define LCDON 0x0F  // LCD initialization command
+#define LCDCLR 0x01 // LCD clear display command
+#define TWOLINE 0x38  // LCD 2-line enable command
+#define CURMOV 0xFE // LCD cursor move instruction
 	 	   		
-/*	 	   		
-***********************************************************************
- Initializations
-***********************************************************************
-*/
 
 void  initializations(void) {
 
 /* Set the PLL speed (bus clock = 24 MHz) */
-  CLKSEL = CLKSEL & 0x80; //; disengage PLL from system
-  PLLCTL = PLLCTL | 0x40; //; turn on PLL
-  SYNR = 0x02;            //; set PLL multiplier
-  REFDV = 0;              //; set PLL divider
+  CLKSEL = CLKSEL & 0x80; // disengage PLL from system
+  PLLCTL = PLLCTL | 0x40; // turn on PLL
+  SYNR = 0x02;            // set PLL multiplier
+  REFDV = 0;              // set PLL divider
   while (!(CRGFLG & 0x08)){  }
-  CLKSEL = CLKSEL | 0x80; //; engage PLL
+  CLKSEL = CLKSEL | 0x80; // engage PLL
 
 /* Disable watchdog timer (COPCTL register) */
-  COPCTL = 0x40   ; //COP off; RTI and COP stopped in BDM-mode
+  COPCTL = 0x40   ; // COP off; RTI and COP stopped in BDM-mode
 
 /* Initialize asynchronous serial port (SCI) for 9600 baud, interrupts off initially */
   SCIBDH =  0x00; //set baud rate to 9600
@@ -117,28 +143,25 @@ void  initializations(void) {
   SCICR2 =  0x0C; //initialize SCI for program-driven operation
   DDRB   =  0x10; //set PB4 for output mode
   PORTB  =  0x10; //assert DTR pin on COM port
-
-/* Initialize peripherals */
-	 	   		
-//***************************
-//*  PWM                    *
-//***************************
- 
+         
+         
 /* 
- Initialize TIM Ch 7 (TC7) for periodic interrupts every 10.0 ms  
-  - Enable timer subsystem                         
-  - Set channel 7 for output compare
-  - Set appropriate pre-scale factor and enable counter reset after OC7
-  - Set up channel 7 to generate 10 ms interrupt rate
-  - Initially disable TIM Ch 7 interrupts	 	   			 		  			 		  		
-*/	 	  
-  // slide 199 	
-  		 		  			 		  		
- 	TSCR1 = 0x80;
+   Initialize TIM Ch 7 (TC7) for periodic interrupts every 10.0 ms  
+    - Enable timer subsystem                         
+    - Set channel 7 for output compare
+    - Set appropriate pre-scale factor and enable counter reset after OC7
+    - Set up channel 7 to generate 10 ms interrupt rate
+    - Initially disable TIM Ch 7 interrupts                                 
+*/                                  
+
+  TSCR1 = 0x80;
   TSCR2 = 0x0C;
-  TIOS  = 0x80;
-  TIE   = 0x80;
-  TC7   = 15000;    
+  TIOS = 0x80;
+  TIE = 0x00;
+  TC7 = 15000;
+  TIE_C7I = 0;
+
+
 
 /*
  Initialize the PWM unit to produce a signal with the following
@@ -150,32 +173,42 @@ void  initializations(void) {
    - duty register = $00 (motor initially stopped)
                          
  IMPORTANT: Need to set MODRR so that PWM Ch 3 is routed to port pin PT3
-*/ 	   			 		  			 		  		
-  // Initialize the PWM unit to produce a signal with the following characteristics on PWM output channel 3:
-  MODRR = 0x08;	    // PT3 used as PWM Ch 3 output
-  PWME = 0x08;      	//enable PWM Ch 3
-	
-	//- sampling frequency of approximately 100 Hz
-	PWMPRCLK	= 0x00;   //sampling frequency = CLK/PWMPER0 = 24MHz/250 = 96kHz
+*/                                
   
-  //- left-aligned, negative polarity
-  PWMPOL	= 0x00;     //active low polarity
- 	PWMCAE	= 0x00;     //left-aligned output mode
   
-  //- period register = $FF (yielding a duty cycle range of 0% to 100%, for duty cycle register values of $00 to $FF 
-  PWMCTL	= 0x00;     //no concatenate (8-bit)
-	PWMCLK	= 0x02;     //select Clock A for Ch 0
+  PWME = 0x0F;
+  PWMPOL = 0x0F;
+
+  PWMPER0 = 0xFF; 
+  PWMDTY0 = 0x00;
   
-  //- duty register = $00 (motor initially stopped)
- 	PWMDTY0	= 0;        //initially clear DUTY register proportional to the amplitude of waveform
+  PWMPER3 = 0xFF;
+  PWMDTY3 = 0x00;
+  
+  PWMPER2 = 0xFF;
+  PWMDTY2 = 0x00;
+  
+  PWMPER1 = 0xFF;
+  PWMDTY1 = 0x00;
+  
+  PWMCLK_PCLK0 = 1;
+  PWMCLK_PCLK1 = 1;
+  PWMCLK_PCLK2 = 1;
+  PWMCLK_PCLK3 = 1;
+  
+  PWMPRCLK = 0x33;
 
- //PWMPER0	= 250;      //set maximum 8-bit period
+  PWMSCLA = 0x3B;
+  PWMSCLB = 0x3B;   // ******************************************************************************************************************************************
+
+  MODRR_MODRR0 = 1; 
+  MODRR_MODRR1 = 1; 
+  MODRR_MODRR2 = 1; 
+  MODRR_MODRR3 = 1; 
 
 
-//***************************
-//*  ATD Sampling           *
-//***************************
- 
+
+
 /* 
  Initialize the ATD to sample a D.C. input voltage (range: 0 to 5V)
  on Channel 0 (connected to a 10K-ohm potentiometer). The ATD should
@@ -187,122 +220,317 @@ void  initializations(void) {
        Vrl (the reference low voltage) is connected to GND on the 
        9S12C32 kit.  An input of 0v will produce output code $00,
        while an input of 5.00 volts will produce output code $FF
-*/	 	   			 		  			 		  		
-    ATDCTL2 = 0x80;
-    ATDCTL3 = 0x08;
-    ATDCTL4 = 0x85;
-  			 		  			 		  		
+*/                                  
+  
+  ATDCTL2      = 0x80;
+  ATDCTL3      = 0x20;      
+  ATDCTL4 = 0x85;
+
+                                  
 
 /* 
   Initialize the pulse accumulator (PA) for event counting mode,
   and to increment on negative edges (no PA interrupts will be utilized,
   since overflow should not occur under normal operating conditions)
-*/		     
-   PACTL = 0x40;
+*/         
 
-//***************************
-//*  RTI, SPI, and I/O      *
-//***************************
+
 
 /*
   Initialize the RTI for an 2.048 ms interrupt rate
 */
-  RTICTL = 0x41;
-  CRGINT = CRGINT | 0x80;
+
+  CRGINT = 0x80;
+  RTICTL = 0x1F;  
   
 /*
   Initialize SPI for baud rate of 6 Mbs, MSB first
   (note that R/S, R/W', and LCD clk are on different PTT pins)
 */
-  SPICR1 = 0x50;
-  SPICR2 = 0x00;
-  DDRM   = 0xFF;
-  SPIBR  = 0x01;
+
+  SPICR1 = SPICR1 | 0x58;
+  SPIBR_SPPR0 = 0x01;
+  SPIBR_SPR0 = 0x00;
 
 /* Initialize digital I/O port pins */
-    DDRAD = 0; 	
-    ATDDIEN = 0xC0; 
-    DDRT = 0xff;
-    
-//***************************
-//*  Initialize LCD         *
-//***************************
+
+  DDRT = 0x7F;
+  DDRM = 0xFF;
+  DDRAD = 0;
+  //ATDDIEN = 0xC0;
+  
 /* 
- Initialize the LCD
-   - pull LCDCLK high (idle)
-   - pull R/W' low (write state)
-   - turn on LCD (LCDON instruction)
-   - enable two-line mode (TWOLINE instruction)
-   - clear LCD (LCDCLR instruction)
-   - wait for 2ms so that the LCD can wake up     
+   Initialize the LCD
+     - pull LCDCLK high (idle)
+     - pull R/W' low (write state)
+     - turn on LCD (LCDON instruction)
+     - enable two-line mode (TWOLINE instruction)
+     - clear LCD (LCDCLR instruction)
+     - wait for 2ms so that the LCD can wake up     
 */ 
-	PTT_PTT4 = 1;   // pull high
-  PTT_PTT3 = 0;   // pull low
-  send_i(LCDON);  // turn on LCD
-  send_i(TWOLINE);  //enable 2 lines
-  send_i(LCDCLR);   //clear LCD 
-            
-/* Initialize interrupts */
-	      
-	      
+
+  PTT_PTT6 = 1;
+  PTT_PTT5 = 0;
+  
+  send_byte(LCDON);
+  send_byte(TWOLINE);  
+  send_byte(LCDCLR);  
+  lcdwait();                                  
+        
 }
 
-	 		  			 		  		
-/*	 		  			 		  		
+	/*                       
 ***********************************************************************
 Main
 ***********************************************************************
 */
 void main(void) {
-  	DisableInterrupts
-	initializations(); 		  			 		  		
-	EnableInterrupts;
+  DisableInterrupts
+  initializations();                      
+  EnableInterrupts;
 
+  mess = "Mark";
+  pmsglcd(mess);
+
+  TIE_C7I = 1;
+  colormode = 2;
+  PWMDTY3 = 255;
  for(;;) {
-  
-/* < start of your main loop > */ 
-  
-  
 
+
+ 
+ if(colormode == 1){  //////////////////////////
   
-   } /* loop forever */
+  
+ ATDCTL5 = 0x10;      
+ while((128&ATDSTAT0)==0) 
+   {} 
+   
+ in0 = ATDDR0H;
+ in1 = ATDDR1H;
+ in2 = ATDDR2H;
+ in3 = ATDDR3H;
+ 
+ PWMDTY0 = in0;
+ PWMDTY1 = in1;
+ PWMDTY2 = in2;
+ PWMDTY3 = in3;
+ }               ///////////////////////////
+
+  red = PWMDTY3;
+  green = PWMDTY2;
+  blue = PWMDTY1;
+
+    
+    
+     
+  } /* loop forever */
    
 }   /* do not leave main */
-
 
 
 
 /*
 ***********************************************************************                       
  RTI interrupt service routine: RTI_ISR
+
+ Initialized for 8.192 ms interrupt rate
+
+  Samples state of pushbuttons (PAD7 = left, PAD6 = right)
+
+  If change in state from "high" to "low" detected, set pushbutton flag
+     leftpb (for PAD7 H -> L), rghtpb (for PAD6 H -> L)
+     Recall that pushbuttons are momentary contact closures to ground 
 ************************************************************************
 */
 
 interrupt 7 void RTI_ISR(void)
+
 {
-  	// clear RTI interrupt flagt 
-  	CRGFLG = CRGFLG | 0x80; 
- 
+
+    CRGFLG = CRGFLG | 0x80; 
+
+                    
+    if (left < PTAD_PTAD7) 
+    {      
+      leftpb = 1;          
+    }
+
+    if ((right < PTAD_PTAD6)) 
+    {                      
+      rghtpb = 1;                          
+    }
+
+    right = PTAD_PTAD6;
+    left = PTAD_PTAD7;
 
 }
 
 /*
 ***********************************************************************                       
-  TIM interrupt service routine	  		
-***********************************************************************
+  TIM interrupt service routine
+
+  Initialized for 10.0 ms interrupt rate
+
+  Uses variable "tencnt" to track if one-tenth second has accumulated
+     and sets "tenths" flag 
+                         
+  Uses variable "onecnt" to track if one second has accumulated and
+     sets "onesec" flag                         
+;***********************************************************************
 */
 
 interrupt 15 void TIM_ISR(void)
 {
-  	// clear TIM CH 7 interrupt flag 
- 	TFLG1 = TFLG1 | 0x80; 
+    // clear TIM CH 7 interrupt flag 
+  TFLG1 = TFLG1 | 0x80; 
+
  
+if(colormode == 2)  ////////////////////RAINBOW////////////
+{
+    
+    if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
+      {
+        for(wait = 500; wait>0 ; wait--)
+        {
+          lcdwait();
+        }
+      }
+        
+    
+    if (color == 1)
+    {///////////  change constant 30 to --> (30 * Poteniometer in pin)/255  to control freq
+      PWMDTY2++;
+      
+      for(wait = 30; wait>0 ; wait--)
+        {
+          lcdwait();
+        }
+        
+        
+      if (PWMDTY2 == 127)
+      {
+        color++;
+      } 
+    }///////////
+    
+    if (color == 2)
+      {
+        PWMDTY2++;
+        
+        lcdwait();
+        
+        if (PWMDTY2 == 255)
+          {
+            color++;
+          }
+      }
+      
+    if (color == 3)
+      {
+        PWMDTY3--;
+        
+        if (PWMDTY3 == 0)
+          {
+            color++;
+          }
+      }
+      
+    if (color == 4)
+      {
+        PWMDTY2--;
+        PWMDTY1++;
+        
+        if (PWMDTY2 == 0)
+          {
+            color++;
+          }
+      }
+      
+    if (color == 5)
+      {
+        PWMDTY3++;
+        PWMDTY1--;
+        
+        if (PWMDTY3 == 127)    
+          {
+            color++;
+          }
+      }
+      
+    if (color == 6)
+      {
+        PWMDTY1++;
+        
+        if (PWMDTY3 < 143)
+          {
+            PWMDTY3++;
+          }
+      
+      if (PWMDTY1 == 255)
+        {
+          color++;
+        } 
+      }
+      
+    if (color == 7)
+      {  //////&&
+        if (PWMDTY3 < 255)
+          {
+            PWMDTY3++;
+          }
+          
+        PWMDTY1--;
+        
+        if (PWMDTY1 == 0)
+          {
+            color = 1;
+          }
+       for(wait = 10; wait>0 ; wait--)
+        {
+          lcdwait();
+        }
+        
+      } //////&&
+} //////////////////////////////POT OF GOLD///////////////////////
+
+/*
+if (color == 1)
+  {
+    PWMDTY1++;
+    
+    if (PWMDTY1 == 255)
+      {
+        color == 2;
+      }
+  }
+  
+if (color == 2)
+  {
+    PWMDTY1--;
+    
+    if (PWMDTY1 == 255)
+      {
+        color == 2;
+      }
+  }  
+*/
+
+
 
 }
 
 /*
 ***********************************************************************                       
-  SCI interrupt service routine		 		  		
+  SCI (transmit section) interrupt service routine
+                         
+    - read status register to enable TDR write
+    - check status of TBUF: if EMPTY, disable SCI transmit interrupts and exit; else, continue
+    - access character from TBUF[TOUT]
+    - output character to SCI TDR
+    - increment TOUT mod TSIZE  
+
+  NOTE: DO NOT USE OUTCHAR (except for debugging)                   
 ***********************************************************************
 */
 
@@ -310,43 +538,57 @@ interrupt 20 void SCI_ISR(void)
 {
  
 
-
 }
-
 
 /*
 ***********************************************************************                              
-display
+  SCI buffered character output routine - bco
+
+  Places character x passed to it into TBUF
+
+   - check TBUF status: if FULL, wait for space; else, continue
+   - place character in TBUF[TIN]
+   - increment TIN mod TSIZE
+   - enable SCI transmit interrupts
+
+  NOTE: DO NOT USE OUTCHAR (except for debugging)
+***********************************************************************
+*/
+
+void bco(char x)
+ {
+ 
+
+}
+
+/*
+***********************************************************************                              
+ RPM display routine - rdisp
+                         
+ This routine starts by reading (and clearing) the 16-bit PA register.
+ It then calculates an estimate of the RPM based on the number of
+ pulses accumulated from the 64-hole chopper over a one second integration
+ period and divides this value by 28 to estimate the gear head output
+ shaft speed. Next, it converts this binary value to a 3-digit binary coded
+ decimal (BCD) representation and displays the converted value on the
+ terminal as "RPM = NNN" (updated in place).  Finally this RPM value, along
+ with a bar graph showing ther percent-of-max of the current RPM value
+ are shifted out to the LCD using pmsglcd.
 
 ***********************************************************************
 */
 
-void disp()
+void rdisp()
 {
-   /* 
-   int hundred;
-    int tens;
-    int ones;
-    
-   rpm = pulscnt * 60/64/28;
-   send_i(LCDCLR);
-   chgline(0x80);
-   
-   pmsglcd("RPM");
-   
-   hundred = rpm/100 + 48;
-   print_c(hundred);
-   tens = (rpm%100)/10+48;
-   print_c(tens);
-   ones = (rpm%100)%10+48;
-   print_c(ones);
-   */
+ 
+ 
 }
 
 /*
 ***********************************************************************
   shiftout: Transmits the character x to external shift 
             register using the SPI.  It should shift MSB first.  
+             
             MISO = PM[4]
             SCK  = PM[5]
 ***********************************************************************
@@ -355,23 +597,17 @@ void disp()
 void shiftout(char x)
 
 {
-  /*
-  // test the SPTEF bit: wait if 0; else, continue
-  // write data x to SPI data register
+  int delay;
+  while(!SPISR_SPTEF) {}
+  SPIDR = x;
+  for(delay = 15; delay > 0; delay--) {}
+    
+  
+  
+  // read the SPTEF bit, continue if bit is 1
+  // write data to SPI data register
   // wait for 30 cycles for SPI data to shift out 
 
-  //PTT_PTT4 = 1;
-  while(!SPISR_SPTEF);
-  SPIDR = x;
-  while(!SPISR_SPTEF);
-  // write data to SPI data register
-  lcdwait();
-  PTT_PTT4 = 0;
-  // wait for 30 cycles for SPI data to shift out
-  lcdwait();
-  PTT_PTT4 = 1;
-  lcdwait();
-  */
 }
 
 /*
@@ -382,8 +618,25 @@ void shiftout(char x)
 
 void lcdwait()
 {
-   int n;
-   for(n=0; n<4800; n++);
+  asm{
+    delay:
+      pshx
+      psha
+      pshc
+      ldaa #2
+      
+    loopo:  
+      ldx #7995
+      
+     loopi:
+       dbne x,loopi
+       
+       dbne a,loopo
+       
+       pulc
+       pula
+       pulx
+  }
 }
 
 /*
@@ -395,11 +648,16 @@ void lcdwait()
 void send_byte(char x)
 {
      // shift out character
-     // pulse LCD clock line low->high->low
-     // wait 2 ms for LCD to process data
-     PTT_PTT2 = 1; 
      shiftout(x);
+     // pulse LCD clock line low->high->low
+     PTT_PTT6 = 0;
      lcdwait();
+     PTT_PTT6 = 1;
+     lcdwait();
+     PTT_PTT6 = 0;
+     lcdwait();
+
+     // wait 2 ms for LCD to process data
 }
 
 /*
@@ -410,8 +668,10 @@ void send_byte(char x)
 
 void send_i(char x)
 {
-        PTT_PTT2 = 0; 
-        shiftout(x);
+        // set the register select line low (instruction data)
+     PTT_PTT4 = 0;
+     send_byte(x);
+        // send byte
 }
 
 /*
@@ -421,10 +681,23 @@ void send_i(char x)
 ***********************************************************************
 */
 
-void chgline(char x)
+void chgline()
 {
-  send_i(CURMOV);
-  send_i(x);
+
+     if(LINE1 == 1)
+     {
+        send_i(CURMOV);
+        send_i(0xC0);
+        LINE1--;
+        LINE2++;
+     } else 
+     {
+        send_i(CURMOV);
+        send_i(0x80);
+        LINE1++;
+        LINE2--;
+     }
+    
 }
 
 /*
@@ -435,8 +708,8 @@ void chgline(char x)
  
 void print_c(char x)
 {
-  while(!(SPISR & 0x80));
-   send_byte(x);
+     PTT_PTT4 = 1;
+     send_byte(x); //
 }
 
 /*
@@ -447,11 +720,17 @@ void print_c(char x)
 
 void pmsglcd(char str[])
 {
-   int n = 0;
-   int length = strlen(str);
-   for(n=0; n< length; n++) {
-   print_c(str[n]);
-   }
+     int mark = 0;
+     int toprint;
+     
+     while(str[mark] != 0) 
+     {
+       toprint = str[mark];
+       print_c(toprint);
+       mark++;
+     }
+       
+      //
 }
 
 /*
@@ -483,3 +762,4 @@ void outchar(char x) {
     while (!(SCISR1 & 0x80));  /* wait for output buffer empty */
     SCIDRL = x;
 }
+
