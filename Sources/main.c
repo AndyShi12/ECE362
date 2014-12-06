@@ -77,6 +77,7 @@ void pmsglcd(char[]);
 /* Variable declarations */
 char leftpb = 0;  // left pushbutton flag
 char rghtpb = 0;  // right pushbutton flag
+
 char prevpb = 0;  // previous pushbutton state
 char runstp = 0;  // motor run/stop flag
 char onesec   = 0;  // one second flag
@@ -91,11 +92,11 @@ int LINE2 = 0;
 char *mess;
 int wait;
 
-int right=1, left=1;
+int prevRight=0, prevLeft=0;
 int red = 0, blue =0, green =0, white = 0, freq = 1;
 unsigned int fade = 0;
 int isRising = 1;
- 
+ int skip = 1;
 unsigned int in0;
 unsigned int in1;
 unsigned int in2;
@@ -251,10 +252,11 @@ void  initializations(void) {
   SPIBR_SPR0 = 0x00;
 
 /* Initialize digital I/O port pins */
-  DDRT = 0x7F;
+  //DDRT = 0x7F;
+  DDRT=0xff;
   DDRM = 0xFF;
   DDRAD = 0;
-  //ATDDIEN = 0xC0;
+  ATDDIEN = 0xC0;
   
 /* 
    Initialize the LCD
@@ -284,8 +286,9 @@ void main(void) {
   initializations();                      
   EnableInterrupts;
 
+
   TIE_C7I = 1;
-  colormode = 3;
+  colormode = 1;
   PWMDTY3 = 255;
   
   //char test = ATDDR7H;
@@ -297,32 +300,52 @@ void main(void) {
 
  
  for(;;) {
-  //solid mode 
+//*********************************************************************** Solid mode
   if(colormode == 1){ 
-    ATDCTL5 = 0x10;      
-    while((128&ATDSTAT0)==0) 
-      {} 
-      
-      in0 = ATDDR0H;
-      in1 = ATDDR1H;
-      in2 = ATDDR2H;
-      in3 = ATDDR3H;
-      
-      PWMDTY0 = in0;
-      PWMDTY1 = in1;
-      PWMDTY2 = in2;
-      PWMDTY3 = in3;
-      
-     // if(leftpb)
-     // colormode = 2;
-  }     
   
- 
- 
- if(colormode==3) {
-  
- for(;;) {
 
+
+  ATDCTL5 = 0x10;      
+  while((128&ATDSTAT0)==0) 
+    {} 
+    
+    in0 = ATDDR0H;
+    in1 = ATDDR1H;
+    in2 = ATDDR2H;
+    in3 = ATDDR3H;
+    
+    PWMDTY0 = in0;
+    PWMDTY1 = in1;
+    PWMDTY2 = in2;
+    PWMDTY3 = in3;
+    
+      
+    if(rghtpb) {
+    outchar('1');
+      rghtpb=0;
+      PWMDTY0 = 0;
+      PWMDTY1 = 0;
+      PWMDTY2 = 0;
+      PWMDTY3 = 255;
+      colormode=2;
+  } 
+  
+  }
+  
+//*********************************************************************** rainbow 
+
+    if(colormode==2) {
+
+    if(rghtpb) {
+    outchar('2');
+    rghtpb=0;
+    colormode=3;
+    }      
+    }
+
+//*********************************************************************** Main
+
+ if(colormode==3) {
      ATDCTL5 = 0x10;      
      while((128&ATDSTAT0)==0) 
       {} 
@@ -335,9 +358,14 @@ void main(void) {
       PWMDTY1 = (in1*fade)/255+1;
       PWMDTY2 = (in2*fade)/255+1;
       PWMDTY3 = (in3*fade)/255+1;
-        
- } 
+ 
+if(rghtpb) {
+outchar('3');
+rghtpb=0;
+colormode=1;
  }
+      
+ }  
  
 /*  
  if(colormode==8) {
@@ -378,10 +406,7 @@ void main(void) {
  }
  }
            */
- 
 
-  
-          
   white = PWMDTY0; 
   blue = PWMDTY3;
   green = PWMDTY2;
@@ -412,19 +437,20 @@ interrupt 7 void RTI_ISR(void)
 {
  CRGFLG = CRGFLG | 0x80; 
 
-                  
-  if (left < PTAD_PTAD7) 
-  {      
-    leftpb = 1;          
-  }
+ 
+  
+  if(PTAD_PTAD6 == 0) {
+       rghtpb =1 && prevRight;
+    }
+    
+    if(PTAD_PTAD7 == 0) {
+      leftpb = 1 && prevLeft;
+    }
+    
+    prevRight = PTAD_PTAD6;
+    prevLeft =  PTAD_PTAD7;
 
-  if ((right < PTAD_PTAD6)) 
-  {                      
-    rghtpb = 1;                          
-  }
-
-  right = PTAD_PTAD6;
-  left = PTAD_PTAD7;
+return;
 }
 
 /*
@@ -452,6 +478,8 @@ interrupt 15 void TIM_ISR(void)
 
 
 //fade mode
+
+
 if(colormode==3) {
   //freq=(freq*ATDDR7H)+1;
     freq = ATDDR7H;
@@ -470,7 +498,50 @@ if(colormode==3) {
     if((isRising==0)&&(fade==0)){
       isRising=1;
     }
+}   
+
+
+/*
+if(colormode==3) {
+  //freq=(freq*ATDDR7H)+1;
+    freq = ATDDR7H;
+    TC7 = freq * 50 + 3000;
+    
+    if( (isRising==1) && (fade<255) ) {
+      if((fade<50)||(fade>200)) {
+        fade+=(1*skip);
+      
+      if(skip==0) {
+        skip=1;
+        } else {
+        skip=0;
+        }
+      } else
+      fade++;
+    }
+    
+    if( (isRising==1) && (fade==255)) {
+      isRising = 0;
+    }
+
+    if((isRising==0)&&(fade>0)) {
+       if((fade<50)||(fade>200)) {
+        fade-=(1*skip);
+      
+      if(skip==0) {
+        skip=1;
+        } else {
+        skip=0;
+        }
+      }else
+      fade--;
+    }
+    if((isRising==0)&&(fade==0)){
+      isRising=1;
+    }
 }
+
+  */
 
 
 // rainbow mode
