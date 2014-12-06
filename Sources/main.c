@@ -279,7 +279,7 @@ void main(void) {
   EnableInterrupts;
 
   TIE_C7I = 1;
-  colormode = 2;
+  colormode = 8;
   PWMDTY3 = 255;
   
  // if(leftpb) { }
@@ -308,6 +308,85 @@ void main(void) {
      // colormode = 2;
   }     
   
+  
+  
+ if(colormode==8) {
+ int flick=0;
+  int loop;
+ for(;;) {
+ if(flick){
+  
+      PWMDTY0 = 255;  // white
+      PWMDTY1 = 255;    // red
+      PWMDTY2 = 255;    // green 
+      PWMDTY3 = 255;  
+      
+      //for(loop=0;loop<10*ATDDR0H;loop++) creates random colors
+      
+      for(loop=0;loop<3;loop++)
+      lcdwait();
+      flick=0;
+      
+ } else {
+   PWMDTY0 = 0;  // white
+      PWMDTY1 = 0;    // red
+      PWMDTY2 =0;    // green 
+      PWMDTY3 = 0; 
+      
+      for(loop=0;loop<3;loop++)
+      lcdwait();
+      flick=1;
+ }
+ }
+ }
+ 
+ 
+ /*if(colormode==3 || colormode==4|| colormode==5|| colormode==6 || colormode==7) {
+  
+   ATDCTL5 = 0x10;      
+    while((128&ATDSTAT0)==0) 
+      {} 
+
+    switch(colormode) {
+    case 3: {
+      PWMDTY0 = 255;  // white
+      PWMDTY1 = 255;    // red
+      PWMDTY2 = 255;    // green 
+      PWMDTY3 = 255;  
+    }
+    break;
+     case 4: {
+        PWMDTY0 = 255;    // white
+        PWMDTY1 = 0;  // red
+        PWMDTY2 = 0;    // green 
+        PWMDTY3 = 0;    // blue
+     }
+    break;
+    case 5: {
+        PWMDTY0 = 0;    // white
+        PWMDTY1 = 255;  // red
+        PWMDTY2 = 0;    // green 
+        PWMDTY3 = 0;    // blue 
+     }
+    break;
+    case 6: {
+        PWMDTY0 = 0;    // white
+        PWMDTY1 = 0;  // red
+        PWMDTY2 = 255;    // green 
+        PWMDTY3 = 0;    // blue 
+     }
+    break;
+    default: {
+        PWMDTY0 = 0;    // white
+        PWMDTY1 = 0;  // red
+        PWMDTY2 = 0;    // green 
+        PWMDTY3 = 255;    // blue 
+    }
+  break;
+    }       
+ }          */
+ 
+ 
  // if (colormode==3) {
  //  if(leftpb)
 //   colormode=1;
@@ -552,8 +631,6 @@ void shiftout(char x)
   SPIDR = x;
   for(delay = 15; delay > 0; delay--) {}
     
-  
-  
   // read the SPTEF bit, continue if bit is 1
   // write data to SPI data register
   // wait for 30 cycles for SPI data to shift out 
