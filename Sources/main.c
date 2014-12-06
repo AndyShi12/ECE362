@@ -92,12 +92,18 @@ char *mess;
 int wait;
 
 int right=1, left=1;
-int red = 0, blue =0, green =0, white = 0;
-
+int red = 0, blue =0, green =0, white = 0, freq = 1;
+unsigned int fade = 0;
+int isRising = 1;
+ 
 unsigned int in0;
 unsigned int in1;
 unsigned int in2;
 unsigned int in3;
+unsigned int in4;
+unsigned int in5;
+unsigned int in6;
+unsigned int in7;
    	   			 		  			 		       
 
 /* Special ASCII characters */
@@ -219,7 +225,7 @@ void  initializations(void) {
 */                                  
   
   ATDCTL2 = 0x80;
-  ATDCTL3 = 0x20;      
+  ATDCTL3 = 0x00;//0x20;      
   ATDCTL4 = 0x85;
                           
 /* 
@@ -279,16 +285,19 @@ void main(void) {
   EnableInterrupts;
 
   TIE_C7I = 1;
-  colormode = 8;
+  colormode = 3;
   PWMDTY3 = 255;
+  
+  //char test = ATDDR7H;
+
   
  // if(leftpb) { }
   //mess = "Mark";
   //pmsglcd(mess);
 
-  
+ 
  for(;;) {
-  // potentiometer input
+  //solid mode 
   if(colormode == 1){ 
     ATDCTL5 = 0x10;      
     while((128&ATDSTAT0)==0) 
@@ -308,22 +317,51 @@ void main(void) {
      // colormode = 2;
   }     
   
+ 
+ 
+ if(colormode==3) {
   
-  
+ for(;;) {
+
+     ATDCTL5 = 0x10;      
+     while((128&ATDSTAT0)==0) 
+      {} 
+      in0 = ATDDR0H;
+      in1 = ATDDR1H;
+      in2 = ATDDR2H;
+      in3 = ATDDR3H;
+            
+      PWMDTY0 = (in0*fade)/255+1;
+      PWMDTY1 = (in1*fade)/255+1;
+      PWMDTY2 = (in2*fade)/255+1;
+      PWMDTY3 = (in3*fade)/255+1;
+        
+ } 
+ }
+ 
+/*  
  if(colormode==8) {
  int flick=0;
   int loop;
  for(;;) {
  if(flick){
   
-      PWMDTY0 = 255;  // white
-      PWMDTY1 = 255;    // red
-      PWMDTY2 = 255;    // green 
-      PWMDTY3 = 255;  
+     ATDCTL5 = 0x10;      
+    while((128&ATDSTAT0)==0) 
+      {} 
+      in0 = ATDDR0H;
+      in1 = ATDDR1H;
+      in2 = ATDDR2H;
+      in3 = ATDDR3H;
+      
+      PWMDTY0 = in0;
+      PWMDTY1 = in1;
+      PWMDTY2 = in2;
+      PWMDTY3 = in3; 
       
       //for(loop=0;loop<10*ATDDR0H;loop++) creates random colors
       
-      for(loop=0;loop<3;loop++)
+      for(loop=0;loop<500;loop++)
       lcdwait();
       flick=0;
       
@@ -333,65 +371,15 @@ void main(void) {
       PWMDTY2 =0;    // green 
       PWMDTY3 = 0; 
       
-      for(loop=0;loop<3;loop++)
+      for(loop=0;loop<500;loop++)
       lcdwait();
       flick=1;
  }
  }
  }
+           */
  
- 
- /*if(colormode==3 || colormode==4|| colormode==5|| colormode==6 || colormode==7) {
-  
-   ATDCTL5 = 0x10;      
-    while((128&ATDSTAT0)==0) 
-      {} 
 
-    switch(colormode) {
-    case 3: {
-      PWMDTY0 = 255;  // white
-      PWMDTY1 = 255;    // red
-      PWMDTY2 = 255;    // green 
-      PWMDTY3 = 255;  
-    }
-    break;
-     case 4: {
-        PWMDTY0 = 255;    // white
-        PWMDTY1 = 0;  // red
-        PWMDTY2 = 0;    // green 
-        PWMDTY3 = 0;    // blue
-     }
-    break;
-    case 5: {
-        PWMDTY0 = 0;    // white
-        PWMDTY1 = 255;  // red
-        PWMDTY2 = 0;    // green 
-        PWMDTY3 = 0;    // blue 
-     }
-    break;
-    case 6: {
-        PWMDTY0 = 0;    // white
-        PWMDTY1 = 0;  // red
-        PWMDTY2 = 255;    // green 
-        PWMDTY3 = 0;    // blue 
-     }
-    break;
-    default: {
-        PWMDTY0 = 0;    // white
-        PWMDTY1 = 0;  // red
-        PWMDTY2 = 0;    // green 
-        PWMDTY3 = 255;    // blue 
-    }
-  break;
-    }       
- }          */
- 
- 
- // if (colormode==3) {
- //  if(leftpb)
-//   colormode=1;
-//  }
-  
   
           
   white = PWMDTY0; 
@@ -462,6 +450,30 @@ interrupt 15 void TIM_ISR(void)
 //************************************Rainbow Mode
 // change constant 30 to --> (30 * Poteniometer in pin)/255  to control freq
 
+
+//fade mode
+if(colormode==3) {
+  //freq=(freq*ATDDR7H)+1;
+    freq = ATDDR7H;
+    TC7 = freq * 50 + 3000;
+    
+    if( (isRising==1) && (fade<255) ) {
+      fade++;
+    }
+    
+    if( (isRising==1) && (fade==255)) {
+      isRising = 0;
+    }
+    if((isRising==0)&&(fade>0)) {
+       fade--;
+    }
+    if((isRising==0)&&(fade==0)){
+      isRising=1;
+    }
+}
+
+
+// rainbow mode
 if(colormode == 2) 
 {  
   
