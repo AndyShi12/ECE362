@@ -77,26 +77,25 @@ void pmsglcd(char[]);
 /* Variable declarations */
 char leftpb = 0;  // left pushbutton flag
 char rghtpb = 0;  // right pushbutton flag
-
 char prevpb = 0;  // previous pushbutton state
 char runstp = 0;  // motor run/stop flag
 char onesec   = 0;  // one second flag
 char tenths = 0;  // tenth of a second flag
 char tin  = 0;  // SCI transmit display buffer IN pointer
 char tout = 0;  // SCI transmit display buffer OUT pointer
-int pulscnt   = 0;  // pulse count (read from PA every second)
-int colormode = 1;
+
+char * message;
+int pulscnt = 0;  // pulse count (read from PA every second)
 int color = 1;
 int LINE1 = 1;
 int LINE2 = 0;
-char *mess;
-int wait;
 
 int prevRight=0, prevLeft=0;
-int red = 0, blue =0, green =0, white = 0, freq = 1;
+int red = 0, blue = 0, green = 0, white = 0;
+int isRising = 1, skip = 0, freq = 1;
+int colormode = 1;
+
 unsigned int fade = 0;
-int isRising = 1;
- int skip = 1;
 unsigned int in0;
 unsigned int in1;
 unsigned int in2;
@@ -158,7 +157,6 @@ void  initializations(void) {
     - Set up channel 7 to generate 10 ms interrupt rate
     - Initially disable TIM Ch 7 interrupts                                 
 */                                  
-
   TSCR1 = 0x80;
   TSCR2 = 0x0C;
   TIOS = 0x80;
@@ -167,18 +165,8 @@ void  initializations(void) {
   TIE_C7I = 0;
 
 /*
- Initialize the PWM unit to produce a signal with the following
- characteristics on PWM output channel 3:
-   - sampling frequency of approximately 100 Hz
-   - left-aligned, negative polarity
-   - period register = $FF (yielding a duty cycle range of 0% to 100%,
-     for duty cycle register values of $00 to $FF 
-   - duty register = $00 (motor initially stopped)
-                         
- IMPORTANT: Need to set MODRR so that PWM Ch 3 is routed to port pin PT3
+ Initialize the PWM unit to produce an input signal on AN0-AN4
 */                                
-  
-  
   PWME = 0x0F;
   PWMPOL = 0x0F;
 
@@ -200,17 +188,13 @@ void  initializations(void) {
   PWMCLK_PCLK3 = 1;
   
   PWMPRCLK = 0x33;
-
   PWMSCLA = 0x3B;
   PWMSCLB = 0x3B;  
-  // *****************************************************************************************************************************************
+
   MODRR_MODRR0 = 1; 
   MODRR_MODRR1 = 1; 
   MODRR_MODRR2 = 1; 
   MODRR_MODRR3 = 1; 
-
-
-
 
 /* 
  Initialize the ATD to sample a D.C. input voltage (range: 0 to 5V)
@@ -224,21 +208,12 @@ void  initializations(void) {
        9S12C32 kit.  An input of 0v will produce output code $00,
        while an input of 5.00 volts will produce output code $FF
 */                                  
-  
   ATDCTL2 = 0x80;
-  ATDCTL3 = 0x00;//0x20;      
+  ATDCTL3 = 0x00;     
   ATDCTL4 = 0x85;
-                          
-/* 
-  Initialize the pulse accumulator (PA) for event counting mode,
-  and to increment on negative edges (no PA interrupts will be utilized,
-  since overflow should not occur under normal operating conditions)
-*/         
-
-
-
+                                
 /*
-  Initialize the RTI for an 2.048 ms interrupt rate
+  Initialize the RTI for an interrupt rate
 */
   CRGINT = 0x80;
   RTICTL = 0x1F;  
@@ -252,8 +227,7 @@ void  initializations(void) {
   SPIBR_SPR0 = 0x00;
 
 /* Initialize digital I/O port pins */
-  //DDRT = 0x7F;
-  DDRT=0xff;
+  DDRT=0xff;    //DDRT = 0x7F;
   DDRM = 0xFF;
   DDRAD = 0;
   ATDDIEN = 0xC0;
@@ -267,7 +241,6 @@ void  initializations(void) {
      - clear LCD (LCDCLR instruction)
      - wait for 2ms so that the LCD can wake up     
 */ 
-
   PTT_PTT6 = 1;
   PTT_PTT5 = 0;
   
@@ -280,34 +253,23 @@ void  initializations(void) {
 //*********************************************************************** /Initialization
                                                                  
 //*********************************************************************** Main
-
 void main(void) {
   DisableInterrupts
   initializations();                      
   EnableInterrupts;
 
-
   TIE_C7I = 1;
   colormode = 1;
   PWMDTY3 = 255;
-  
-  //char test = ATDDR7H;
 
-  
- // if(leftpb) { }
-  //mess = "Mark";
-  //pmsglcd(mess);
+  for(;;) {
 
- 
- for(;;) {
 //*********************************************************************** Solid mode
-  if(colormode == 1){ 
-  
-
-
-  ATDCTL5 = 0x10;      
-  while((128&ATDSTAT0)==0) 
-    {} 
+  if(colormode == 1)
+  {
+    ATDCTL5 = 0x10;      
+      while((128&ATDSTAT0)==0) 
+      {} 
     
     in0 = ATDDR0H;
     in1 = ATDDR1H;
@@ -319,54 +281,56 @@ void main(void) {
     PWMDTY2 = in2;
     PWMDTY3 = in3;
     
-      
     if(rghtpb) {
     outchar('1');
-      rghtpb=0;
+      rghtpb = 0;
       PWMDTY0 = 0;
       PWMDTY1 = 0;
       PWMDTY2 = 0;
       PWMDTY3 = 255;
       colormode=2;
-  } 
-  
+    } 
   }
   
-//*********************************************************************** rainbow 
-
+//*********************************************************************** Random mode
     if(colormode==2) {
-
     if(rghtpb) {
-    outchar('2');
-    rghtpb=0;
-    colormode=3;
-    }      
+      outchar('2');
+      rghtpb = 0;
+      colormode = 3;
+      }      
     }
-
-//*********************************************************************** Main
-
+//*********************************************************************** Fade mode
  if(colormode==3) {
-     ATDCTL5 = 0x10;      
-     while((128&ATDSTAT0)==0) 
-      {} 
-      in0 = ATDDR0H;
-      in1 = ATDDR1H;
-      in2 = ATDDR2H;
-      in3 = ATDDR3H;
-            
-      PWMDTY0 = (in0*fade)/255+1;
-      PWMDTY1 = (in1*fade)/255+1;
-      PWMDTY2 = (in2*fade)/255+1;
-      PWMDTY3 = (in3*fade)/255+1;
- 
-if(rghtpb) {
-outchar('3');
-rghtpb=0;
-colormode=1;
- }
-      
+   ATDCTL5 = 0x10;      
+   while((128&ATDSTAT0)==0) 
+    {} 
+    in0 = ATDDR0H;
+    in1 = ATDDR1H;
+    in2 = ATDDR2H;
+    in3 = ATDDR3H;
+          
+    PWMDTY0 = (in0*fade)/255+1;
+    PWMDTY1 = (in1*fade)/255+1;
+    PWMDTY2 = (in2*fade)/255+1;
+    PWMDTY3 = (in3*fade)/255+1;
+
+  if(rghtpb) {
+  outchar('3');
+  rghtpb=0;
+  colormode=1;
+   }    
  }  
  
+  white = PWMDTY0; 
+  blue = PWMDTY3;
+  green = PWMDTY2;
+  red = PWMDTY1;
+  
+  } /* loop forever */   
+}   /* do not leave main */
+
+// --------------------------------------------  if needed - flicker mode 
 /*  
  if(colormode==8) {
  int flick=0;
@@ -402,21 +366,10 @@ colormode=1;
       for(loop=0;loop<500;loop++)
       lcdwait();
       flick=1;
- }
- }
- }
-           */
-
-  white = PWMDTY0; 
-  blue = PWMDTY3;
-  green = PWMDTY2;
-  red = PWMDTY1;
-  
-  } /* loop forever */   
-}   /* do not leave main */
-
-//*********************************************************************** /Main
-
+    }
+  }
+}
+ */
 
 /*
 ***********************************************************************                       
@@ -433,23 +386,19 @@ colormode=1;
 */
 
 interrupt 7 void RTI_ISR(void)
-
 {
- CRGFLG = CRGFLG | 0x80; 
+  CRGFLG = CRGFLG | 0x80; 
 
- 
-  
   if(PTAD_PTAD6 == 0) {
-       rghtpb =1 && prevRight;
-    }
-    
-    if(PTAD_PTAD7 == 0) {
-      leftpb = 1 && prevLeft;
-    }
-    
-    prevRight = PTAD_PTAD6;
-    prevLeft =  PTAD_PTAD7;
+   rghtpb =1 && prevRight;
+  }
 
+  if(PTAD_PTAD7 == 0) {
+  leftpb = 1 && prevLeft;
+  }
+
+  prevRight = PTAD_PTAD6;
+  prevLeft =  PTAD_PTAD7;
 return;
 }
 
@@ -473,15 +422,8 @@ interrupt 15 void TIM_ISR(void)
   TFLG1 = TFLG1 | 0x80; 
 
 
-//************************************Rainbow Mode
-// change constant 30 to --> (30 * Poteniometer in pin)/255  to control freq
-
-
-//fade mode
-
-
+//************************************ Fade Mode
 if(colormode==3) {
-  //freq=(freq*ATDDR7H)+1;
     freq = ATDDR7H;
     TC7 = freq * 50 + 3000;
     
@@ -499,7 +441,6 @@ if(colormode==3) {
       isRising=1;
     }
 }   
-
 
 /*
 if(colormode==3) {
@@ -540,7 +481,6 @@ if(colormode==3) {
       isRising=1;
     }
 }
-
   */
 
 
@@ -548,87 +488,73 @@ if(colormode==3) {
 if(colormode == 2) 
 {  
   
- // if(leftpb) {
-//   colormode = 3; 
-//  }
+if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
+{
+    //for(wait=0; wait<5; wait++)
+    lcdwait();
+}
+
+if (color == 1)
+{
+  PWMDTY2++;
+    lcdwait();      
+  if (PWMDTY2 == 127)
+    color++;
+}
+
+if (color == 2)
+  {
+    PWMDTY2++;
+    lcdwait();
+    if (PWMDTY2 == 255)
+      color++;
+  }
   
-  if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
-    {
-     // for(wait = 250; wait>0 ; wait--)  
-        //for(wait=0; wait<5; wait++)
-        lcdwait();
-    }
+if (color == 3)
+  {
+    PWMDTY3--;
+    lcdwait();
+    if (PWMDTY3 == 0)
+      color++;
+  }
   
-    if (color == 1)
-    {
-      PWMDTY2++;
-      //for(wait=30; wait>0; wait--)
-        lcdwait();
-      
-      if (PWMDTY2 == 127)
-        color++;
-    }
-    
-    if (color == 2)
-      {
-        PWMDTY2++;
-        lcdwait();
-        
-        if (PWMDTY2 == 255)
-            color++;
-      }
-      
-    if (color == 3)
-      {
-        PWMDTY3--;
-        lcdwait();
-        if (PWMDTY3 == 0)
-            color++;
-      }
-      
-    if (color == 4)
-      {
-        PWMDTY2--;
-        PWMDTY1++;
-        lcdwait();
-        if (PWMDTY2 == 0)
-            color++;
-      }
-      
-    if (color == 5)
-      {
+if (color == 4)
+  {
+    PWMDTY2--;
+    PWMDTY1++;
+    lcdwait();
+    if (PWMDTY2 == 0)
+      color++;
+  }
+  
+if (color == 5)
+  {
+    PWMDTY3++;
+    PWMDTY1--;
+    lcdwait();
+    if (PWMDTY3 == 127)    
+      color++;
+  }
+  
+if (color == 6)
+  {
+    PWMDTY1++;
+    lcdwait(); 
+    if (PWMDTY3 < 143)
         PWMDTY3++;
-        PWMDTY1--;
-        lcdwait();
-        if (PWMDTY3 == 127)    
-            color++;
-      }
-      
-    if (color == 6)
-      {
-        PWMDTY1++;
-        lcdwait(); 
-        if (PWMDTY3 < 143)
-            PWMDTY3++;
-      
-        if (PWMDTY1 == 255)
-          color++;
-      }
-      
-    if (color == 7)
-      { 
-        if (PWMDTY3 < 255)
-            PWMDTY3++;
-        
-        PWMDTY1--;
-        
-        if (PWMDTY1 == 0)
-            color = 1;
-        
-        lcdwait();
-       // for(wait = 2; wait>0 ; wait--)
-         //   lcdwait();
-      } 
+    if (PWMDTY1 == 255)
+      color++;
+  }
+  
+if (color == 7)
+  { 
+    if (PWMDTY3 < 255)
+        PWMDTY3++;
+    PWMDTY1--;
+    if (PWMDTY1 == 0)
+        color = 1; 
+    lcdwait();
+  } 
 }
 }
 
