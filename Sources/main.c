@@ -83,22 +83,21 @@ char onesec   = 0;  // one second flag
 char tenths = 0;  // tenth of a second flag
 char tin  = 0;  // SCI transmit display buffer IN pointer
 char tout = 0;  // SCI transmit display buffer OUT pointer
-int red =0;
-int blue = 0;
-int green = 0;
 int pulscnt   = 0;  // pulse count (read from PA every second)
 int colormode = 1;
 int color = 1;
 int LINE1 = 1;
 int LINE2 = 0;
 char *mess;
-int right = 1;
-int left = 1;
+int wait;
+
+int right=1, left=1;
+int red = 0, blue =0, green =0, white = 0;
+
 unsigned int in0;
 unsigned int in1;
 unsigned int in2;
 unsigned int in3;
-int wait;
    	   			 		  			 		       
 
 /* Special ASCII characters */
@@ -234,7 +233,6 @@ void  initializations(void) {
 /*
   Initialize the RTI for an 2.048 ms interrupt rate
 */
-
   CRGINT = 0x80;
   RTICTL = 0x1F;  
   
@@ -242,13 +240,11 @@ void  initializations(void) {
   Initialize SPI for baud rate of 6 Mbs, MSB first
   (note that R/S, R/W', and LCD clk are on different PTT pins)
 */
-
   SPICR1 = SPICR1 | 0x58;
   SPIBR_SPPR0 = 0x01;
   SPIBR_SPR0 = 0x00;
 
 /* Initialize digital I/O port pins */
-
   DDRT = 0x7F;
   DDRM = 0xFF;
   DDRAD = 0;
@@ -274,7 +270,7 @@ void  initializations(void) {
         
 }
 //*********************************************************************** /Initialization
-
+                                                                 
 //*********************************************************************** Main
 
 void main(void) {
@@ -282,33 +278,48 @@ void main(void) {
   initializations();                      
   EnableInterrupts;
 
-  mess = "Mark";
-  pmsglcd(mess);
-
   TIE_C7I = 1;
-  colormode = 1;
+  colormode = 2;
   PWMDTY3 = 255;
+  
+ // if(leftpb) { }
+  //mess = "Mark";
+  //pmsglcd(mess);
 
+  
  for(;;) {
+  // potentiometer input
   if(colormode == 1){ 
     ATDCTL5 = 0x10;      
     while((128&ATDSTAT0)==0) 
       {} 
+      
       in0 = ATDDR0H;
       in1 = ATDDR1H;
       in2 = ATDDR2H;
       in3 = ATDDR3H;
-
+      
       PWMDTY0 = in0;
       PWMDTY1 = in1;
       PWMDTY2 = in2;
       PWMDTY3 = in3;
-  }             
-
-
-  red = PWMDTY3;
+      
+     // if(leftpb)
+     // colormode = 2;
+  }     
+  
+ // if (colormode==3) {
+ //  if(leftpb)
+//   colormode=1;
+//  }
+  
+  
+          
+  white = PWMDTY0; 
+  blue = PWMDTY3;
   green = PWMDTY2;
-  blue = PWMDTY1;
+  red = PWMDTY1;
+  
   } /* loop forever */   
 }   /* do not leave main */
 
@@ -374,15 +385,22 @@ interrupt 15 void TIM_ISR(void)
 
 if(colormode == 2) 
 {  
+  
+ // if(leftpb) {
+//   colormode = 3; 
+//  }
+  
   if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
     {
-      for(wait = 250; wait>0 ; wait--)  
+     // for(wait = 250; wait>0 ; wait--)  
+        //for(wait=0; wait<5; wait++)
         lcdwait();
     }
+  
     if (color == 1)
     {
       PWMDTY2++;
-      for(wait=30; wait>0; wait--)
+      //for(wait=30; wait>0; wait--)
         lcdwait();
       
       if (PWMDTY2 == 127)
@@ -392,107 +410,64 @@ if(colormode == 2)
     if (color == 2)
       {
         PWMDTY2++;
-        
         lcdwait();
         
         if (PWMDTY2 == 255)
-          {
             color++;
-          }
       }
       
     if (color == 3)
       {
         PWMDTY3--;
-        
+        lcdwait();
         if (PWMDTY3 == 0)
-          {
             color++;
-          }
       }
       
     if (color == 4)
       {
         PWMDTY2--;
         PWMDTY1++;
-        
+        lcdwait();
         if (PWMDTY2 == 0)
-          {
             color++;
-          }
       }
       
     if (color == 5)
       {
         PWMDTY3++;
         PWMDTY1--;
-        
+        lcdwait();
         if (PWMDTY3 == 127)    
-          {
             color++;
-          }
       }
       
     if (color == 6)
       {
         PWMDTY1++;
-        
+        lcdwait(); 
         if (PWMDTY3 < 143)
-          {
             PWMDTY3++;
-          }
       
-      if (PWMDTY1 == 255)
-        {
+        if (PWMDTY1 == 255)
           color++;
-        } 
       }
       
     if (color == 7)
-      {  //////&&
+      { 
         if (PWMDTY3 < 255)
-          {
             PWMDTY3++;
-          }
-          
+        
         PWMDTY1--;
         
         if (PWMDTY1 == 0)
-          {
             color = 1;
-          }
-       for(wait = 10; wait>0 ; wait--)
-        {
-          lcdwait();
-        }
         
-      } //////&&
-} //////////////////////////////POT OF GOLD///////////////////////
-
-/*
-if (color == 1)
-  {
-    PWMDTY1++;
-    
-    if (PWMDTY1 == 255)
-      {
-        color == 2;
-      }
-  }
-  
-if (color == 2)
-  {
-    PWMDTY1--;
-    
-    if (PWMDTY1 == 255)
-      {
-        color == 2;
-      }
-  }  
-*/
-
-
-
+        lcdwait();
+       // for(wait = 2; wait>0 ; wait--)
+         //   lcdwait();
+      } 
+}
 }
 
 /*
