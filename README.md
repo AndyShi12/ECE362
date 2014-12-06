@@ -1,8 +1,7 @@
-ECE362
+ECE362 Mini Project - Fall 2014  
 ======
 
-Fall 2014  
-LED Infinity Mirror (Audio Visualizer)  
+__LED Infinity Mirror (Audio Visualizer)__  
 
 __Team 6__  
 Team/Doc Leader: Mark Oscai  
