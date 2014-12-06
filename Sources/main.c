@@ -5,17 +5,17 @@
 	 	   			 		  			 		  		
  Team ID: Team 6
 
- Project Name: < ? >
+ Project Name: LED Infinity Mirror (Audio Visualizer)
 
  Team Members:
 
-   - Team/Doc Leader: < ? >      Signature: ______________________
+   - Team/Doc Leader: Mark Oscai     Signature: 
    
-   - Software Leader: < ? >      Signature: ______________________
+   - Software Leader: Andy Shi      Signature: 
 
-   - Interface Leader: < ? >     Signature: ______________________
+   - Interface Leader: Jeff Heath     Signature:  
 
-   - Peripheral Leader: < ? >    Signature: ______________________
+   - Peripheral Leader: Thaddeus Morken    Signature: 
 
 
  Academic Honesty Statement:  In signing above, we hereby certify that we 
@@ -50,15 +50,12 @@
 
   Update history (add an entry every time a significant change is made):
 
-  Date: < ? >  Name: < ? >   Update: < ? >
-
-  Date: < ? >  Name: < ? >   Update: < ? >
-
-  Date: < ? >  Name: < ? >   Update: < ? >
-
+  See Github, https://github.com/AndyShi12/ECE362
 
 ***********************************************************************
 */
+
+//*********************************************************************** Declaration
 
 #include <hidef.h>      /* common defines and macros */
 #include "derivative.h"      /* derivative-specific definitions */
@@ -122,6 +119,9 @@ char tbuf[TSIZE]; // SCI transmit display buffer
 #define TWOLINE 0x38  // LCD 2-line enable command
 #define CURMOV 0xFE // LCD cursor move instruction
 	 	   		
+//*********************************************************************** /Declaration
+
+//*********************************************************************** Initialization
 
 void  initializations(void) {
 
@@ -143,8 +143,7 @@ void  initializations(void) {
   SCICR2 =  0x0C; //initialize SCI for program-driven operation
   DDRB   =  0x10; //set PB4 for output mode
   PORTB  =  0x10; //assert DTR pin on COM port
-         
-         
+            
 /* 
    Initialize TIM Ch 7 (TC7) for periodic interrupts every 10.0 ms  
     - Enable timer subsystem                         
@@ -160,8 +159,6 @@ void  initializations(void) {
   TIE = 0x00;
   TC7 = 15000;
   TIE_C7I = 0;
-
-
 
 /*
  Initialize the PWM unit to produce a signal with the following
@@ -199,8 +196,8 @@ void  initializations(void) {
   PWMPRCLK = 0x33;
 
   PWMSCLA = 0x3B;
-  PWMSCLB = 0x3B;   // ******************************************************************************************************************************************
-
+  PWMSCLB = 0x3B;  
+  // *****************************************************************************************************************************************
   MODRR_MODRR0 = 1; 
   MODRR_MODRR1 = 1; 
   MODRR_MODRR2 = 1; 
@@ -222,12 +219,10 @@ void  initializations(void) {
        while an input of 5.00 volts will produce output code $FF
 */                                  
   
-  ATDCTL2      = 0x80;
-  ATDCTL3      = 0x20;      
+  ATDCTL2 = 0x80;
+  ATDCTL3 = 0x20;      
   ATDCTL4 = 0x85;
-
-                                  
-
+                          
 /* 
   Initialize the pulse accumulator (PA) for event counting mode,
   and to increment on negative edges (no PA interrupts will be utilized,
@@ -278,12 +273,10 @@ void  initializations(void) {
   lcdwait();                                  
         
 }
+//*********************************************************************** /Initialization
 
-	/*                       
-***********************************************************************
-Main
-***********************************************************************
-*/
+//*********************************************************************** Main
+
 void main(void) {
   DisableInterrupts
   initializations();                      
@@ -293,41 +286,33 @@ void main(void) {
   pmsglcd(mess);
 
   TIE_C7I = 1;
-  colormode = 2;
+  colormode = 1;
   PWMDTY3 = 255;
+
  for(;;) {
+  if(colormode == 1){ 
+    ATDCTL5 = 0x10;      
+    while((128&ATDSTAT0)==0) 
+      {} 
+      in0 = ATDDR0H;
+      in1 = ATDDR1H;
+      in2 = ATDDR2H;
+      in3 = ATDDR3H;
 
+      PWMDTY0 = in0;
+      PWMDTY1 = in1;
+      PWMDTY2 = in2;
+      PWMDTY3 = in3;
+  }             
 
- 
- if(colormode == 1){  //////////////////////////
-  
-  
- ATDCTL5 = 0x10;      
- while((128&ATDSTAT0)==0) 
-   {} 
-   
- in0 = ATDDR0H;
- in1 = ATDDR1H;
- in2 = ATDDR2H;
- in3 = ATDDR3H;
- 
- PWMDTY0 = in0;
- PWMDTY1 = in1;
- PWMDTY2 = in2;
- PWMDTY3 = in3;
- }               ///////////////////////////
 
   red = PWMDTY3;
   green = PWMDTY2;
   blue = PWMDTY1;
-
-    
-    
-     
-  } /* loop forever */
-   
+  } /* loop forever */   
 }   /* do not leave main */
 
+//*********************************************************************** /Main
 
 
 /*
@@ -347,23 +332,21 @@ void main(void) {
 interrupt 7 void RTI_ISR(void)
 
 {
+ CRGFLG = CRGFLG | 0x80; 
 
-    CRGFLG = CRGFLG | 0x80; 
+                  
+  if (left < PTAD_PTAD7) 
+  {      
+    leftpb = 1;          
+  }
 
-                    
-    if (left < PTAD_PTAD7) 
-    {      
-      leftpb = 1;          
-    }
+  if ((right < PTAD_PTAD6)) 
+  {                      
+    rghtpb = 1;                          
+  }
 
-    if ((right < PTAD_PTAD6)) 
-    {                      
-      rghtpb = 1;                          
-    }
-
-    right = PTAD_PTAD6;
-    left = PTAD_PTAD7;
-
+  right = PTAD_PTAD6;
+  left = PTAD_PTAD7;
 }
 
 /*
@@ -382,37 +365,29 @@ interrupt 7 void RTI_ISR(void)
 
 interrupt 15 void TIM_ISR(void)
 {
-    // clear TIM CH 7 interrupt flag 
+  // clear TIM CH 7 interrupt flag 
   TFLG1 = TFLG1 | 0x80; 
 
- 
-if(colormode == 2)  ////////////////////RAINBOW////////////
-{
-    
-    if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
-      {
-        for(wait = 500; wait>0 ; wait--)
-        {
-          lcdwait();
-        }
-      }
-        
-    
+
+//************************************Rainbow Mode
+// change constant 30 to --> (30 * Poteniometer in pin)/255  to control freq
+
+if(colormode == 2) 
+{  
+  if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
+    {
+      for(wait = 250; wait>0 ; wait--)  
+        lcdwait();
+    }
     if (color == 1)
-    {///////////  change constant 30 to --> (30 * Poteniometer in pin)/255  to control freq
+    {
       PWMDTY2++;
+      for(wait=30; wait>0; wait--)
+        lcdwait();
       
-      for(wait = 30; wait>0 ; wait--)
-        {
-          lcdwait();
-        }
-        
-        
       if (PWMDTY2 == 127)
-      {
         color++;
-      } 
-    }///////////
+    }
     
     if (color == 2)
       {
@@ -720,17 +695,15 @@ void print_c(char x)
 
 void pmsglcd(char str[])
 {
-     int mark = 0;
-     int toprint;
-     
-     while(str[mark] != 0) 
-     {
-       toprint = str[mark];
-       print_c(toprint);
-       mark++;
-     }
-       
-      //
+ int index = 0;
+ int toprint;
+ 
+   while(str[index] != 0) 
+   {
+     toprint = str[index];
+     print_c(toprint);
+     index++;
+   }
 }
 
 /*
@@ -745,7 +718,7 @@ void pmsglcd(char str[])
 
 char inchar(void) {
   /* receives character from the terminal channel */
-        while (!(SCISR1 & 0x20)); /* wait for input */
+    while (!(SCISR1 & 0x20)); /* wait for input */
     return SCIDRL;
 }
 
