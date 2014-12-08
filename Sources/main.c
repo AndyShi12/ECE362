@@ -94,6 +94,7 @@ int prevRight=0, prevLeft=0;
 int red = 0, blue = 0, green = 0, white = 0;
 int isRising = 1, skip = 0, freq = 1;
 int colormode = 1;
+int brightness=1;
 
 unsigned int fade = 0;
 unsigned int in0;
@@ -318,14 +319,45 @@ void main(void) {
   if(rghtpb) {
   outchar('3');
   rghtpb=0;
-  colormode=1;
+  colormode=4;
    }    
  }  
  
+ //************************************************************************ Audio
+ if(colormode == 4) 
+  {
+   ATDCTL5 = 0x10; 
+   while((128&ATDSTAT0)==0) 
+    {} 
+
+    in1 = ATDDR4H; //R bass
+    in2 = ATDDR5H; //G mid
+    in3 = ATDDR6H; //B treble
+          
+    PWMDTY3 = in3;
+    PWMDTY2 = in2;
+    PWMDTY1 = in1;
+
+   if (in1>in2 && in1>in3)
+    brightness = in1;
+   else if(in2>in3)
+    brightness = in2;
+   else
+    brightness = in3;
+
+    PWMDTY0 = brightness;
+ 
+  if(rghtpb) {
+  outchar('4');
+  rghtpb=0;
+  colormode=1;
+  }   
+ }
+
   white = PWMDTY0; 
-  blue = PWMDTY3;
-  green = PWMDTY2;
   red = PWMDTY1;
+  green = PWMDTY2;
+  blue = PWMDTY3;
   
   } /* loop forever */   
 }   /* do not leave main */
