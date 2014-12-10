@@ -272,10 +272,10 @@ void main(void) {
       while((128&ATDSTAT0)==0) 
       {} 
     
-    in0 = ATDDR0H;
-    in1 = ATDDR1H;
-    in2 = ATDDR2H;
-    in3 = ATDDR3H;
+    in0 = ATDDR3H;     // changed from 0-3
+    in1 = ATDDR4H;
+    in2 = ATDDR5H;
+    in3 = ATDDR6H;
     
     PWMDTY0 = in0;
     PWMDTY1 = in1;
@@ -289,7 +289,7 @@ void main(void) {
       PWMDTY1 = 0;
       PWMDTY2 = 0;
       PWMDTY3 = 255;
-      colormode=2;
+      colormode = 2;
     } 
   }
   
@@ -306,10 +306,10 @@ void main(void) {
    ATDCTL5 = 0x10;      
    while((128&ATDSTAT0)==0) 
     {} 
-    in0 = ATDDR0H;
-    in1 = ATDDR1H;
-    in2 = ATDDR2H;
-    in3 = ATDDR3H;
+    in0 = ATDDR3H;
+    in1 = ATDDR4H;
+    in2 = ATDDR5H;
+    in3 = ATDDR6H;
           
     PWMDTY0 = (in0*fade)/255+1;
     PWMDTY1 = (in1*fade)/255+1;
@@ -330,22 +330,23 @@ void main(void) {
    while((128&ATDSTAT0)==0) 
     {} 
 
-    in1 = ATDDR4H; //R bass
-    in2 = ATDDR5H; //G mid
-    in3 = ATDDR6H; //B treble
-          
+    in1 = ATDDR0H; //R bass
+    in2 = ATDDR1H; //G mid
+    in3 = ATDDR2H; //B treble
+    
+    in0 = ATDDR3H; // white 
+     
     PWMDTY3 = in3;
     PWMDTY2 = in2;
     PWMDTY1 = in1;
+    PWMDTY0 = in0;
 
-   if (in1>in2 && in1>in3)
+   /*if (in1>in2 && in1>in3)
     brightness = in1;
    else if(in2>in3)
     brightness = in2;
    else
-    brightness = in3;
-
-    PWMDTY0 = brightness;
+    brightness = in3;          */
  
   if(rghtpb) {
   outchar('4');
