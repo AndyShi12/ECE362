@@ -2,7 +2,7 @@
 ************************************************************************
  ECE 362 - Mini-Project C Source File - Fall 2014                    
 ***********************************************************************
-	 	   			 		  			 		  		
+                                  
  Team ID: Team 6
 
  Project Name: LED Infinity Mirror (Audio Visualizer)
@@ -87,8 +87,6 @@ char tout = 0;  // SCI transmit display buffer OUT pointer
 char * message;
 int pulscnt = 0;  // pulse count (read from PA every second)
 int color = 1;
-int LINE1 = 1;
-int LINE2 = 0;
 
 int prevRight=0, prevLeft=0;
 int red = 0, blue = 0, green = 0, white = 0;
@@ -105,7 +103,7 @@ unsigned int in4;
 unsigned int in5;
 unsigned int in6;
 unsigned int in7;
-   	   			 		  			 		       
+                                   
 
 /* Special ASCII characters */
 #define TSIZE 81  // transmit buffer size (80 characters)
@@ -124,7 +122,9 @@ char tbuf[TSIZE]; // SCI transmit display buffer
 #define LCDCLR 0x01 // LCD clear display command
 #define TWOLINE 0x38  // LCD 2-line enable command
 #define CURMOV 0xFE // LCD cursor move instruction
-	 	   		
+#define LINE1 = 0x80  // LCD line 1 cursor position
+#define LINE2 = 0xC0  // LCD line 2 cursor position
+          
 //*********************************************************************** /Declaration
 
 //*********************************************************************** Initialization
@@ -242,16 +242,16 @@ void  initializations(void) {
      - clear LCD (LCDCLR instruction)
      - wait for 2ms so that the LCD can wake up     
 */ 
-  PTT_PTT6 = 1;
-  PTT_PTT5 = 0;
-  
-  send_byte(LCDON);
-  send_byte(TWOLINE);  
-  send_byte(LCDCLR);  
-  lcdwait();                                  
+
+     PTT_PTT6 = 1;//clock idle as high 
+     PTT_PTT5 = 0;//LCD write mode
+     send_i(LCDON);
+     send_i(TWOLINE);
+     send_i(LCDCLR);
+     lcdwait();                                        
         
 }
-//*********************************************************************** /Initialization
+//******************************************************************; ***** /Initialization
                                                                  
 //*********************************************************************** Main
 void main(void) {
@@ -262,7 +262,7 @@ void main(void) {
   TIE_C7I = 1;
   colormode = 1;
   PWMDTY3 = 255;
-
+  rdisp();
   for(;;) {
 
 //*********************************************************************** Solid mode
@@ -272,10 +272,10 @@ void main(void) {
       while((128&ATDSTAT0)==0) 
       {} 
     
-    in0 = ATDDR3H;     // changed from 0-3
-    in1 = ATDDR4H;
-    in2 = ATDDR5H;
-    in3 = ATDDR6H;
+    in0 = ATDDR4H;     // changed from 0-3
+    in1 = ATDDR1H;
+    in2 = ATDDR2H;
+    in3 = ATDDR3H;
     
     PWMDTY0 = in0;
     PWMDTY1 = in1;
@@ -283,6 +283,7 @@ void main(void) {
     PWMDTY3 = in3;
     
     if(rghtpb) {
+    rdisp();
     outchar('1');
       rghtpb = 0;
       PWMDTY0 = 0;
@@ -296,6 +297,7 @@ void main(void) {
 //*********************************************************************** Random mode
     if(colormode==2) {
     if(rghtpb) {
+    rdisp();
       outchar('2');
       rghtpb = 0;
       colormode = 3;
@@ -306,10 +308,10 @@ void main(void) {
    ATDCTL5 = 0x10;      
    while((128&ATDSTAT0)==0) 
     {} 
-    in0 = ATDDR3H;
-    in1 = ATDDR4H;
-    in2 = ATDDR5H;
-    in3 = ATDDR6H;
+    in0 = ATDDR4H;
+    in1 = ATDDR1H;
+    in2 = ATDDR2H;
+    in3 = ATDDR3H;
           
     PWMDTY0 = (in0*fade)/255+1;
     PWMDTY1 = (in1*fade)/255+1;
@@ -317,6 +319,7 @@ void main(void) {
     PWMDTY3 = (in3*fade)/255+1;
 
   if(rghtpb) {
+  rdisp();
   outchar('3');
   rghtpb=0;
   colormode=4;
@@ -330,11 +333,11 @@ void main(void) {
    while((128&ATDSTAT0)==0) 
     {} 
 
-    in1 = ATDDR0H; //R bass
+    in1 = ATDDR3H; //R bass
     in2 = ATDDR1H; //G mid
     in3 = ATDDR2H; //B treble
     
-    in0 = ATDDR3H; // white 
+    in0 = ATDDR0H; // white 
      
     PWMDTY3 = in3;
     PWMDTY2 = in2;
@@ -349,6 +352,7 @@ void main(void) {
     brightness = in3;          */
  
   if(rghtpb) {
+  rdisp();
   outchar('4');
   rghtpb=0;
   colormode=1;
@@ -432,6 +436,7 @@ interrupt 7 void RTI_ISR(void)
 
   prevRight = PTAD_PTAD6;
   prevLeft =  PTAD_PTAD7;
+  
 return;
 }
 
@@ -607,9 +612,20 @@ if (color == 7)
 
 interrupt 20 void SCI_ISR(void)
 {
- 
-
-}
+  /*  
+  if(SCISR1_TDRE == 1)
+    {
+      if(TIN == TOUT)
+        {
+          SCICR2_SCTIE = 0;//disable interrupts
+          return; 
+        } else
+           {
+             SCIDRL = tbuf[TOUT];  //send byte to data register
+             TOUT = (TOUT + 1) % TSIZE;
+           }
+    } */
+}     
 
 /*
 ***********************************************************************                              
@@ -627,9 +643,16 @@ interrupt 20 void SCI_ISR(void)
 */
 
 void bco(char x)
- {
+ {     /*
  
-
+    while((TIN + 1) % TSIZE == TOUT) 
+    {
+      
+    }
+    tbuf[TIN] = x;
+    TIN = (TIN + 1) % TSIZE;
+    SCICR2_SCTIE = 1;  //sci transmit interrupt enable
+                       */
 }
 
 /*
@@ -651,8 +674,30 @@ void bco(char x)
 
 void rdisp()
 {
- 
- 
+   send_i(0x01); //clr lcd
+   //chgline(0x80);  //LINE 1
+   if(colormode == 1) 
+   {
+     pmsglcd("Mode: Solid");   
+      
+   }
+   if(colormode == 2) 
+   {
+    pmsglcd("Mode: Fade");
+      
+   }
+   
+  if(colormode == 3) 
+  {
+    pmsglcd("Mode: Spectrum");
+  
+  }
+  if(colormode == 4) 
+  {
+    pmsglcd("Mode: Music");
+
+  }
+    
 }
 
 /*
@@ -668,14 +713,24 @@ void rdisp()
 void shiftout(char x)
 
 {
-  int delay;
-  while(!SPISR_SPTEF) {}
-  SPIDR = x;
-  for(delay = 15; delay > 0; delay--) {}
+ // int delay;
+//  while(!SPISR_SPTEF) {}
+//  SPIDR = x;
+ // for(delay = 15; delay > 0; delay--) {}
     
   // read the SPTEF bit, continue if bit is 1
   // write data to SPI data register
   // wait for 30 cycles for SPI data to shift out 
+  
+    // read the SPTEF bit, continue if bit is 1
+  while(SPISR_SPTEF != 1) 
+  {
+  }
+    // write data to SPI data register
+    SPIDR = x;
+
+     // wait for 30 cycles for SPI data to shift out
+     lcdwait();
 
 }
 
@@ -716,7 +771,7 @@ void lcdwait()
 
 void send_byte(char x)
 {
-     // shift out character
+  /*   // shift out character
      shiftout(x);
      // pulse LCD clock line low->high->low
      PTT_PTT6 = 0;
@@ -726,7 +781,18 @@ void send_byte(char x)
      PTT_PTT6 = 0;
      lcdwait();
 
+     // wait 2 ms for LCD to process data   */
+     
+     
+      // shift out character
+     shiftout(x);
+     
+     // pulse LCD clock line low->high->low
+     PTT_PTT6 = 1; //I THOUGHT THIS WAS IDLE HIGH????
+     PTT_PTT6 = 0;
+     PTT_PTT6 = 1;
      // wait 2 ms for LCD to process data
+     lcdwait();
 }
 
 /*
@@ -750,10 +816,10 @@ void send_i(char x)
 ***********************************************************************
 */
 
-void chgline()
+void chgline(char x)
 {
 
-     if(LINE1 == 1)
+   /*  if(LINE1 == 1)
      {
         send_i(CURMOV);
         send_i(0xC0);
@@ -765,7 +831,10 @@ void chgline()
         send_i(0x80);
         LINE1++;
         LINE2--;
-     }
+     } */ 
+    send_i(CURMOV);
+    send_byte(x);
+    
     
 }
 
