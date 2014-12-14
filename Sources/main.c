@@ -5,7 +5,7 @@
                                   
  Team ID: Team 6
 
- Project Name: LED Infinity Mirror (Audio Visualizer)
+ Project Name: Infinity Mirror Pyramid (Audio Visualizer)
 
  Team Members:
 
@@ -26,7 +26,13 @@
 
 ***********************************************************************
 
- The objective of this Mini-Project is to .... < ? >
+ The objective of this Mini-Project is to .... 
+ 
+ Create a 4 mode LED strip controller:
+  mode 1: Solid RGB
+  mode 2: Spectrum
+  mode 3: Fade
+  mode 4: Audio input
 
 
 ***********************************************************************
@@ -34,19 +40,19 @@
  List of project-specific success criteria (functionality that will be
  demonstrated):
 
- 1.
+ 1. Solid RGB, potentiometer input (ATD), power output to LED strip (PWM)
 
- 2.
+ 2. Spectrum, timer interrupt - preset colors  (TIM/RTI)
 
- 3.
+ 3. Fade, same as RGB mode with an extra potentiometer for frequency adjust
+                                                                            
+ 4. Audio mode, ATD input for audio signal, PWM output to LED strip
 
- 4.
-
- 5.
+ 5. SPI for LCD display (SPI)
 
 ***********************************************************************
 
-  Date code started: < ? >
+  Date code started: 11/20/2014
 
   Update history (add an entry every time a significant change is made):
 
@@ -170,16 +176,13 @@ void  initializations(void) {
 */                                
   PWME = 0x0F;
   PWMPOL = 0x0F;
-
+// Set PWMPER and PWMDTY to each input/output
   PWMPER0 = 0xFF; 
   PWMDTY0 = 0x00;
-  
   PWMPER3 = 0xFF;
   PWMDTY3 = 0x00;
-  
   PWMPER2 = 0xFF;
   PWMDTY2 = 0x00;
-  
   PWMPER1 = 0xFF;
   PWMDTY1 = 0x00;
   
@@ -210,7 +213,7 @@ void  initializations(void) {
        while an input of 5.00 volts will produce output code $FF
 */                                  
   ATDCTL2 = 0x80;
-  ATDCTL3 = 0x00;     
+  ATDCTL3 = 0x38; //00111000    
   ATDCTL4 = 0x85;
                                 
 /*
@@ -242,9 +245,8 @@ void  initializations(void) {
      - clear LCD (LCDCLR instruction)
      - wait for 2ms so that the LCD can wake up     
 */ 
-
-     PTT_PTT6 = 1;//clock idle as high 
-     PTT_PTT5 = 0;//LCD write mode
+     PTT_PTT6 = 1;  //clock idle as high 
+     PTT_PTT5 = 0;  //LCD write mode
      send_i(LCDON);
      send_i(TWOLINE);
      send_i(LCDCLR);
@@ -271,22 +273,21 @@ void main(void) {
     ATDCTL5 = 0x10;      
       while((128&ATDSTAT0)==0) 
       {} 
-    
-    in0 = ATDDR4H;     // changed from 0-3
+    // Sample input
+    in0 = ATDDR4H;     
     in1 = ATDDR1H;
     in2 = ATDDR2H;
     in3 = ATDDR3H;
-    
+    // Assign output
     PWMDTY0 = in0;
     PWMDTY1 = in1;
     PWMDTY2 = in2;
     PWMDTY3 = in3;
-    
+    // change to mode 2
     if(rghtpb) {
     rdisp();
     outchar('1');
       rghtpb = 0;
-      PWMDTY0 = 0;
       PWMDTY1 = 0;
       PWMDTY2 = 0;
       PWMDTY3 = 255;
@@ -295,12 +296,13 @@ void main(void) {
   }
   
 //*********************************************************************** Random mode
+    // Runs on timer interrupts, change to mode 3
     if(colormode==2) {
     if(rghtpb) {
     rdisp();
       outchar('2');
       rghtpb = 0;
-      colormode = 3;
+      colormode = 3;       
       }      
     }
 //*********************************************************************** Fade mode
@@ -308,16 +310,17 @@ void main(void) {
    ATDCTL5 = 0x10;      
    while((128&ATDSTAT0)==0) 
     {} 
+  // sample inputs
     in0 = ATDDR4H;
     in1 = ATDDR1H;
     in2 = ATDDR2H;
     in3 = ATDDR3H;
-          
+  // assign outputs, +1 to prevent turning off LEDs
     PWMDTY0 = (in0*fade)/255+1;
     PWMDTY1 = (in1*fade)/255+1;
     PWMDTY2 = (in2*fade)/255+1;
     PWMDTY3 = (in3*fade)/255+1;
-
+  // change modes
   if(rghtpb) {
   rdisp();
   outchar('3');
@@ -332,25 +335,18 @@ void main(void) {
    ATDCTL5 = 0x10; 
    while((128&ATDSTAT0)==0) 
     {} 
-
+    // sample audio inputs
     in1 = ATDDR3H; //R bass
     in2 = ATDDR1H; //G mid
     in3 = ATDDR2H; //B treble
-    
-    in0 = ATDDR0H; // white 
-     
-    PWMDTY3 = in3;
-    PWMDTY2 = in2;
-    PWMDTY1 = in1;
-    PWMDTY0 = in0;
-
-   /*if (in1>in2 && in1>in3)
-    brightness = in1;
-   else if(in2>in3)
-    brightness = in2;
-   else
-    brightness = in3;          */
- 
+    in4 = ATDDR4H; // white 
+    in5 = ATDDR5H;
+    // assign outputs     
+    PWMDTY3 = in3*in5/255;
+    PWMDTY2 = in2*in5/255;
+    PWMDTY1 = in1*in5/255;  
+    PWMDTY0 = in4;
+  // change modes
   if(rghtpb) {
   rdisp();
   outchar('4');
@@ -358,55 +354,13 @@ void main(void) {
   colormode=1;
   }   
  }
-
+// assign color
   white = PWMDTY0; 
   red = PWMDTY1;
   green = PWMDTY2;
-  blue = PWMDTY3;
-  
-  } /* loop forever */   
-}   /* do not leave main */
-
-// --------------------------------------------  if needed - flicker mode 
-/*  
- if(colormode==8) {
- int flick=0;
-  int loop;
- for(;;) {
- if(flick){
-  
-     ATDCTL5 = 0x10;      
-    while((128&ATDSTAT0)==0) 
-      {} 
-      in0 = ATDDR0H;
-      in1 = ATDDR1H;
-      in2 = ATDDR2H;
-      in3 = ATDDR3H;
-      
-      PWMDTY0 = in0;
-      PWMDTY1 = in1;
-      PWMDTY2 = in2;
-      PWMDTY3 = in3; 
-      
-      //for(loop=0;loop<10*ATDDR0H;loop++) creates random colors
-      
-      for(loop=0;loop<500;loop++)
-      lcdwait();
-      flick=0;
-      
- } else {
-   PWMDTY0 = 0;  // white
-      PWMDTY1 = 0;    // red
-      PWMDTY2 =0;    // green 
-      PWMDTY3 = 0; 
-      
-      for(loop=0;loop<500;loop++)
-      lcdwait();
-      flick=1;
-    }
-  }
+  blue = PWMDTY3; 
+  } 
 }
- */
 
 /*
 ***********************************************************************                       
@@ -421,22 +375,15 @@ void main(void) {
      Recall that pushbuttons are momentary contact closures to ground 
 ************************************************************************
 */
-
 interrupt 7 void RTI_ISR(void)
 {
   CRGFLG = CRGFLG | 0x80; 
 
-  if(PTAD_PTAD6 == 0) {
+  // assign to ATD7 pushbutton
+  if(PORTAD0_PTAD7 == 0) {
    rghtpb =1 && prevRight;
   }
-
-  if(PTAD_PTAD7 == 0) {
-  leftpb = 1 && prevLeft;
-  }
-
-  prevRight = PTAD_PTAD6;
-  prevLeft =  PTAD_PTAD7;
-  
+  prevRight = PTAD_PTAD7;
 return;
 }
 
@@ -453,22 +400,20 @@ return;
      sets "onesec" flag                         
 ;***********************************************************************
 */
-
 interrupt 15 void TIM_ISR(void)
 {
   // clear TIM CH 7 interrupt flag 
   TFLG1 = TFLG1 | 0x80; 
 
-
 //************************************ Fade Mode
 if(colormode==3) {
-    freq = ATDDR7H;
+    freq = ATDDR6H;
     TC7 = freq * 50 + 3000;
     
+    // adjust frequency from ATD6 input
     if( (isRising==1) && (fade<255) ) {
       fade++;
-    }
-    
+    }  
     if( (isRising==1) && (fade==255)) {
       isRising = 0;
     }
@@ -479,56 +424,17 @@ if(colormode==3) {
       isRising=1;
     }
 }   
-
-/*
-if(colormode==3) {
-  //freq=(freq*ATDDR7H)+1;
-    freq = ATDDR7H;
-    TC7 = freq * 50 + 3000;
-    
-    if( (isRising==1) && (fade<255) ) {
-      if((fade<50)||(fade>200)) {
-        fade+=(1*skip);
-      
-      if(skip==0) {
-        skip=1;
-        } else {
-        skip=0;
-        }
-      } else
-      fade++;
-    }
-    
-    if( (isRising==1) && (fade==255)) {
-      isRising = 0;
-    }
-
-    if((isRising==0)&&(fade>0)) {
-       if((fade<50)||(fade>200)) {
-        fade-=(1*skip);
-      
-      if(skip==0) {
-        skip=1;
-        } else {
-        skip=0;
-        }
-      }else
-      fade--;
-    }
-    if((isRising==0)&&(fade==0)){
-      isRising=1;
-    }
-}
-  */
-
-
-// rainbow mode
-if(colormode == 2) 
+//************************************************** color spectrum
+if(colormode == 2)
 {  
-  
-if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == PWMDTY0 == 0))
+ATDCTL5 = 0x10;      
+   while((128&ATDSTAT0)==0) 
+    {}                 
+PWMDTY0 = ATDDR4H;    
+
+// Loop through preset color settings  
+if(PWMDTY3 == 255 && (PWMDTY2 == PWMDTY1 == 0))
 {
-    //for(wait=0; wait<5; wait++)
     lcdwait();
 }
 
@@ -597,65 +503,6 @@ if (color == 7)
 }
 
 /*
-***********************************************************************                       
-  SCI (transmit section) interrupt service routine
-                         
-    - read status register to enable TDR write
-    - check status of TBUF: if EMPTY, disable SCI transmit interrupts and exit; else, continue
-    - access character from TBUF[TOUT]
-    - output character to SCI TDR
-    - increment TOUT mod TSIZE  
-
-  NOTE: DO NOT USE OUTCHAR (except for debugging)                   
-***********************************************************************
-*/
-
-interrupt 20 void SCI_ISR(void)
-{
-  /*  
-  if(SCISR1_TDRE == 1)
-    {
-      if(TIN == TOUT)
-        {
-          SCICR2_SCTIE = 0;//disable interrupts
-          return; 
-        } else
-           {
-             SCIDRL = tbuf[TOUT];  //send byte to data register
-             TOUT = (TOUT + 1) % TSIZE;
-           }
-    } */
-}     
-
-/*
-***********************************************************************                              
-  SCI buffered character output routine - bco
-
-  Places character x passed to it into TBUF
-
-   - check TBUF status: if FULL, wait for space; else, continue
-   - place character in TBUF[TIN]
-   - increment TIN mod TSIZE
-   - enable SCI transmit interrupts
-
-  NOTE: DO NOT USE OUTCHAR (except for debugging)
-***********************************************************************
-*/
-
-void bco(char x)
- {     /*
- 
-    while((TIN + 1) % TSIZE == TOUT) 
-    {
-      
-    }
-    tbuf[TIN] = x;
-    TIN = (TIN + 1) % TSIZE;
-    SCICR2_SCTIE = 1;  //sci transmit interrupt enable
-                       */
-}
-
-/*
 ***********************************************************************                              
  RPM display routine - rdisp
                          
@@ -671,33 +518,27 @@ void bco(char x)
 
 ***********************************************************************
 */
-
 void rdisp()
 {
-   send_i(0x01); //clr lcd
-   //chgline(0x80);  //LINE 1
+   send_i(0x01); // clear LCD
+
+   // color mode to LCD output
    if(colormode == 1) 
    {
-     pmsglcd("Mode: Solid");   
-      
+     pmsglcd("Mode: Solid");         
    }
    if(colormode == 2) 
    {
-    pmsglcd("Mode: Fade");
-      
+    pmsglcd("Mode: Fade");   
    }
-   
   if(colormode == 3) 
   {
     pmsglcd("Mode: Spectrum");
-  
   }
   if(colormode == 4) 
   {
     pmsglcd("Mode: Music");
-
   }
-    
 }
 
 /*
@@ -711,27 +552,18 @@ void rdisp()
 */
  
 void shiftout(char x)
-
-{
- // int delay;
-//  while(!SPISR_SPTEF) {}
-//  SPIDR = x;
- // for(delay = 15; delay > 0; delay--) {}
-    
+{   
   // read the SPTEF bit, continue if bit is 1
   // write data to SPI data register
   // wait for 30 cycles for SPI data to shift out 
-  
-    // read the SPTEF bit, continue if bit is 1
+
+  // read the SPTEF bit, continue if bit is 1
   while(SPISR_SPTEF != 1) 
-  {
-  }
-    // write data to SPI data register
-    SPIDR = x;
-
-     // wait for 30 cycles for SPI data to shift out
-     lcdwait();
-
+  {}
+  // write data to SPI data register
+  SPIDR = x;
+  // wait for 30 cycles for SPI data to shift out
+  lcdwait();
 }
 
 /*
@@ -771,28 +603,15 @@ void lcdwait()
 
 void send_byte(char x)
 {
-  /*   // shift out character
-     shiftout(x);
-     // pulse LCD clock line low->high->low
-     PTT_PTT6 = 0;
-     lcdwait();
-     PTT_PTT6 = 1;
-     lcdwait();
-     PTT_PTT6 = 0;
-     lcdwait();
+ // shift out character
+ shiftout(x);
+ 
+ // pulse LCD clock line low->high->low
+ PTT_PTT6 = 1; 
+ PTT_PTT6 = 0;
+ PTT_PTT6 = 1;
 
-     // wait 2 ms for LCD to process data   */
-     
-     
-      // shift out character
-     shiftout(x);
-     
-     // pulse LCD clock line low->high->low
-     PTT_PTT6 = 1; //I THOUGHT THIS WAS IDLE HIGH????
-     PTT_PTT6 = 0;
-     PTT_PTT6 = 1;
-     // wait 2 ms for LCD to process data
-     lcdwait();
+ lcdwait();
 }
 
 /*
@@ -800,13 +619,11 @@ void send_byte(char x)
   send_i: Sends instruction byte x to LCD  
 ***********************************************************************
 */
-
 void send_i(char x)
 {
-        // set the register select line low (instruction data)
-     PTT_PTT4 = 0;
-     send_byte(x);
-        // send byte
+  // set the register select line low (instruction data)
+  PTT_PTT4 = 0;
+  send_byte(x);
 }
 
 /*
@@ -815,27 +632,10 @@ void send_i(char x)
   NOTE: Cursor positions are encoded in the LINE1/LINE2 variables
 ***********************************************************************
 */
-
 void chgline(char x)
 {
-
-   /*  if(LINE1 == 1)
-     {
-        send_i(CURMOV);
-        send_i(0xC0);
-        LINE1--;
-        LINE2++;
-     } else 
-     {
-        send_i(CURMOV);
-        send_i(0x80);
-        LINE1++;
-        LINE2--;
-     } */ 
-    send_i(CURMOV);
-    send_byte(x);
-    
-    
+  send_i(CURMOV);
+  send_byte(x);   
 }
 
 /*
@@ -843,11 +643,10 @@ void chgline(char x)
   print_c: Print (single) character x on LCD            
 ***********************************************************************
 */
- 
 void print_c(char x)
 {
      PTT_PTT4 = 1;
-     send_byte(x); //
+     send_byte(x); 
 }
 
 /*
@@ -855,7 +654,6 @@ void print_c(char x)
   pmsglcd: print character string str[] on LCD
 ***********************************************************************
 */
-
 void pmsglcd(char str[])
 {
  int index = 0;
@@ -878,7 +676,6 @@ void pmsglcd(char str[])
  Example:      char ch1 = inchar();
 ***********************************************************************
 */
-
 char inchar(void) {
   /* receives character from the terminal channel */
     while (!(SCISR1 & 0x20)); /* wait for input */
@@ -892,7 +689,6 @@ char inchar(void) {
  Example:      outchar('x');
 ***********************************************************************
 */
-
 void outchar(char x) {
   /* sends a character to the terminal channel */
     while (!(SCISR1 & 0x80));  /* wait for output buffer empty */
