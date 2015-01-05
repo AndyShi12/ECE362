@@ -19,6 +19,6 @@ We have proposed four modes for our LED outputs
 •	Color spectrum mode: LED strip cycles though color spectrum at a predetermined speed.  
 •	Audio mode: samples an audio input signal and outputs the treble, mid, and bass components to red, green, and blue outputs respectively.  
 
-For this project, Mark Oscai will be leading the team as team leader; he is in charge of team management, the design and implementation (interfacing) of the circuit that powers LEDs and MCU as well as building infinity mirrors pyramid. Thaddeus Morken is responsible for assisting in pyramid construction and designing an audio signal rectifier with filters. Andy Shi is the software leader and together with Jeff Heath will be in charge of the software design and interfacing; they will also be in charge of the project documentations and specifications. 
+For this project, Mark Oscai will be leading the team as team leader; he is in charge of team management, the design and implementation of the circuit that powers LEDs and MCU. Thaddeus Morken is responsible for assisting in pyramid construction and designing an audio signal rectifier with filters. Andy Shi is the software leader and together with Jeff Heath will be in charge of the software design and interfacing; they will also be in charge of the project documentations and specifications. 
 
 Full Documentation - http://andyshi.com/infinity-mirror-pyramid/
